@@ -16,15 +16,5 @@ services:
     restart: unless-stopped
     expose:
       - "80"
-
-  caddy:
-    image: caddy:2.10-alpine
-    container_name: remote-dicom-caddy
-    restart: unless-stopped
-    ports:
-      - "8043:8043"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       - orthanc
-      - viewer
