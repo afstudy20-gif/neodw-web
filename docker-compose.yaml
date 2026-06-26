@@ -40,13 +40,16 @@ services:
           }
         }
 
-  # Coolify v4 magic: SERVICE_FQDN_VIEWER_80 declares this service as the
-  # publicly routed one and tells Traefik to forward 1.drtr.uk → viewer:80.
+  # Coolify v4 magic: SERVICE_FQDN_VIEWER_80 with an explicit value tells
+  # Coolify both which service is publicly routed AND on which domain.
+  # Without the explicit "=..." Coolify cannot infer the FQDN at deploy
+  # time and Traefik never gets labels — the result is a 503 on every
+  # request to 1.drtr.uk.
   viewer:
     build: .
     restart: unless-stopped
     environment:
-      - SERVICE_FQDN_VIEWER_80
+      - SERVICE_FQDN_VIEWER_80=https://1.drtr.uk
     expose:
       - "80"
     depends_on:
