@@ -1,20 +1,26 @@
 services:
   orthanc:
     image: orthancteam/orthanc:25.4.0
-    container_name: remote-dicom-orthanc
     restart: unless-stopped
     expose:
       - "8042"
       - "4242"
     volumes:
-      - ./orthanc-data:/var/lib/orthanc/db
+      - orthanc-data:/var/lib/orthanc/db
       - ./orthanc.json:/etc/orthanc/orthanc.json:ro
 
+  # Coolify v4 magic: SERVICE_FQDN_VIEWER_80 declares this service as the
+  # publicly routed one and tells Traefik to forward 1.drtr.uk → viewer:80.
+  # The companion env var SERVICE_URL_VIEWER is auto-populated by Coolify.
   viewer:
     build: .
-    container_name: remote-dicom-viewer
     restart: unless-stopped
+    environment:
+      - SERVICE_FQDN_VIEWER_80
     expose:
       - "80"
     depends_on:
       - orthanc
+
+volumes:
+  orthanc-data:
