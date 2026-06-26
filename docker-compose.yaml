@@ -7,11 +7,41 @@ services:
       - "4242"
     volumes:
       - orthanc-data:/var/lib/orthanc/db
-      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+    # Inline Orthanc config via env var. Avoids bind-mounting a config file
+    # from the host — Coolify checks out the repo into an internal directory
+    # where Docker's path resolution turned ./orthanc.json into a directory
+    # mount, exploding the container with "IsADirectoryError".
+    environment:
+      ORTHANC_JSON: |
+        {
+          "Name": "remote-dicom",
+          "HttpPort": 8042,
+          "DicomPort": 4242,
+          "RemoteAccessAllowed": true,
+          "AuthenticationEnabled": false,
+          "DicomWeb": {
+            "Enable": true,
+            "Root": "/dicom-web/",
+            "EnableWado": true,
+            "WadoRoot": "/wado",
+            "Ssl": false,
+            "StudiesMetadata": "Full",
+            "SeriesMetadata": "Full"
+          },
+          "HttpHeaders": {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Origin, Content-Type, Accept, Authorization, Cache-Control",
+            "Access-Control-Expose-Headers": "Content-Length, Content-Range"
+          },
+          "OrthancExplorer2": {
+            "Enable": true,
+            "IsDefaultOrthancUI": true
+          }
+        }
 
   # Coolify v4 magic: SERVICE_FQDN_VIEWER_80 declares this service as the
   # publicly routed one and tells Traefik to forward 1.drtr.uk → viewer:80.
-  # The companion env var SERVICE_URL_VIEWER is auto-populated by Coolify.
   viewer:
     build: .
     restart: unless-stopped
