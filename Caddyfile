@@ -1,0 +1,40 @@
+# Single edge for the remote-dicom stack. Coolify/Traefik terminates TLS and
+# forwards HTTP to this Caddy; we split traffic between Orthanc (DICOMweb
+# API) and the viewer (static SPA) on path.
+:8043 {
+	# CORS preflight: Orthanc returns 404 on OPTIONS, breaking the browser's
+	# preflight for non-safelisted Accept values (application/dicom+json,
+	# multipart/related). Caddy answers preflights here and never hits Orthanc.
+	@cors_preflight {
+		method OPTIONS
+		path /dicom-web/* /orthanc/*
+	}
+	handle @cors_preflight {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "*"
+		header Access-Control-Max-Age "86400"
+		respond 204
+	}
+
+	# DICOMweb (QIDO/WADO-RS) → Orthanc. CORS headers added to real responses.
+	handle /dicom-web/* {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Expose-Headers "Content-Length, Content-Range"
+		reverse_proxy orthanc:8042
+	}
+
+	# Orthanc admin UI + REST API (uploads, study listing). Same CORS surface.
+	handle /orthanc/* {
+		header Access-Control-Allow-Origin "*"
+		uri strip_prefix /orthanc
+		reverse_proxy orthanc:8042
+	}
+
+	# Everything else → SPA viewer. Cornerstone WASM threads require COOP/COEP
+	# secure-context isolation; the viewer's own nginx already sets these so
+	# we just reverse_proxy and let it through unchanged.
+	handle {
+		reverse_proxy viewer:80
+	}
+}

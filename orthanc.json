@@ -1,0 +1,30 @@
+{
+  "Name": "remote-dicom",
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false,
+  "RegisteredUsers": {
+    "viewer": "oMm6xB8Po5BZyedbiXTz",
+    "admin": "Uo08ZfFJHPywmoBZqdNm"
+  },
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Ssl": false,
+    "StudiesMetadata": "Full",
+    "SeriesMetadata": "Full"
+  },
+  "HttpHeaders": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Origin, Content-Type, Accept, Authorization, Cache-Control",
+    "Access-Control-Expose-Headers": "Content-Length, Content-Range"
+  },
+  "OrthancExplorer2": {
+    "Enable": true,
+    "IsDefaultOrthancUI": true
+  }
+}

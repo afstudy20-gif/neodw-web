@@ -1,0 +1,22 @@
+node_modules
+dist
+.git
+.DS_Store
+*.local
+.vite
+npm-debug.log
+
+# Server-side artifacts — not part of the viewer image build
+orthanc-data
+tunnel.log
+tunnel.pid
+tunnel-keeper.log
+tunnel-keeper.pid
+tunnel-url.txt
+.credentials
+Caddyfile
+docker-compose.yml
+orthanc.json
+*.sh
+README.md
+coolify.md

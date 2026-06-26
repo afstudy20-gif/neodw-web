@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-nd-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a4f8a" />
+    <meta name="description" content="Remote DICOM Viewer — browser-based CT/MR/plain film review. Open, measure, share." />
+    <title>Remote DICOM Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.svg" />
+    <link rel="mask-icon" href="/favicon.svg" color="#1B3A6B" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      (function () {
+        var local = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '[::1]';
+        if (!local) return;
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations()
+            .then(function (registrations) {
+              return Promise.all(registrations.map(function (registration) { return registration.unregister(); }));
+            })
+            .catch(function () {});
+        }
+        if (window.caches) {
+          caches.keys()
+            .then(function (keys) {
+              return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+            })
+            .catch(function () {});
+        }
+      })();
+    </script>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Remote DICOM" />
+    <meta name="application-name" content="Remote DICOM Viewer" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!--
+      Fonts are now self-hosted via @fontsource (see src/main.tsx). The
+      previous Google Fonts CDN <link> would be blocked under
+      Cross-Origin-Embedder-Policy: credentialless because the gstatic
+      response does not advertise Cross-Origin-Resource-Policy.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

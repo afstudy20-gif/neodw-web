@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs and temp
+*.log
+*.tmp
+
+# Tunnel state (paths, PIDs, ephemeral URLs)
+tunnel-url.txt
+tunnel.pid
+tunnel-keeper.pid
+
+# PHI — DICOM storage volume from the local Orthanc container.
+# NEVER push patient data to git, public or private.
+orthanc-data/
+
+# Random Orthanc passwords (deprecated path; auth is currently disabled
+# but kept ignored to prevent leakage if re-enabled later).
+.credentials
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+.claude/
+
+# Python (rules + tooling around the repo)
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
