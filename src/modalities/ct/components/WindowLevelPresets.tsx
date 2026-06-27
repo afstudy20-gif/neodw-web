@@ -56,9 +56,22 @@ interface Props {
   renderingEngineId: string;
   viewportIds: string[];
   modality?: string;
+  /**
+   * Name of a preset to auto-apply once each time `volumeKey` changes.
+   * Used to land the user on a sensible default window (e.g. "Bone" for
+   * spine CT) instead of whatever WindowCenter/WindowWidth the scanner
+   * baked into the DICOM header.
+   */
+  defaultPreset?: string;
+  /**
+   * Identifier of the currently active volume (e.g. SeriesInstanceUID).
+   * When this changes, the default preset is re-applied — once the
+   * viewport has had a tick to mount.
+   */
+  volumeKey?: string;
 }
 
-export function WindowLevelPresets({ renderingEngineId, viewportIds, modality }: Props) {
+export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, defaultPreset, volumeKey }: Props) {
   const mod = modality?.trim().toUpperCase() || '';
   const PRESETS = (mod === 'MR' || mod === 'MRI') ? MR_PRESETS : CT_PRESETS;
   // Start with no preset highlighted — the initial W/L comes from the
@@ -171,6 +184,33 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality }:
       viewport.render();
     }
   }, [invertColors, renderingEngineId, viewportIds]);
+
+  // Auto-apply the configured default preset once per volume. Polling
+  // for the viewport to be ready is cheaper than threading a "volume
+  // mounted" event up through CtApp — the volume usually appears within
+  // a few hundred milliseconds of the series switch.
+  useEffect(() => {
+    if (!defaultPreset || !volumeKey) return;
+    const preset = PRESETS.find((p) => p.name === defaultPreset);
+    if (!preset) return;
+    let cancelled = false;
+    let attempts = 0;
+    const tick = () => {
+      if (cancelled) return;
+      const engine = cornerstone.getRenderingEngine(renderingEngineId);
+      const ready = engine && getAllTargetVpIds().some((id) => {
+        try { return !!engine.getViewport(id); } catch { return false; }
+      });
+      if (ready) {
+        applyPreset(preset);
+      } else if (attempts < 30) {
+        attempts += 1;
+        setTimeout(tick, 200);
+      }
+    };
+    const start = setTimeout(tick, 200);
+    return () => { cancelled = true; clearTimeout(start); };
+  }, [volumeKey, defaultPreset, PRESETS, renderingEngineId, getAllTargetVpIds, applyPreset]);
 
   // Number key shortcuts (1-9) for presets
   useEffect(() => {

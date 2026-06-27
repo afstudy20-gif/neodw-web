@@ -949,7 +949,13 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
             resizeViewports();
           }} />
           <div className="toolbar-divider" />
-          <WindowLevelPresets renderingEngineId={RENDERING_ENGINE_ID} viewportIds={MPR_VIEWPORT_IDS} modality={activeSeries?.modality} />
+          <WindowLevelPresets
+            renderingEngineId={RENDERING_ENGINE_ID}
+            viewportIds={MPR_VIEWPORT_IDS}
+            modality={activeSeries?.modality}
+            defaultPreset={(activeSeries?.modality || '').toUpperCase() === 'CT' ? 'Bone' : undefined}
+            volumeKey={activeSeries?.seriesInstanceUID}
+          />
           <div className="toolbar-divider" />
           {viewportMode === 'tavi-oblique' && (
             <>
