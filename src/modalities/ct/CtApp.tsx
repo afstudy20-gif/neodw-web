@@ -35,6 +35,15 @@ import { LVADASPanel, type LVADASPanelHandle } from './components/LVADASPanel';
 import { VascularPanel, type VascularPanelHandle } from './components/VascularPanel';
 import { SecondaryCaptureViewer } from './components/SecondaryCaptureViewer';
 
+// Pre-rendered VRT (Volume Rendering Technique) screenshots come back as
+// RGB Secondary Capture stacks. They have no useful ImagePositionPatient/
+// ImageOrientationPatient for MPR reconstruction, so cornerstone shows a
+// blank viewport when one is loaded as the primary series. Strip them
+// here — radiology review only needs the source axial stack.
+function filterVrtSeries(series: DicomSeriesInfo[]): DicomSeriesInfo[] {
+  return series.filter((s) => !/\bVRT\b|VR Range|Volume Render/i.test(s.seriesDescription || ''));
+}
+
 const RENDERING_ENGINE_ID = 'myRenderingEngine';
 const VOLUME_ID = 'cornerstoneStreamingImageVolume:myVolume';
 const VIEWPORT_IDS = ['axial', 'sagittal', 'coronal', 'volume3d'];
@@ -339,7 +348,8 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
         }
         loadedFilesRef.current = expanded;
         setLoadingProgress('Parsing DICOM files...');
-        const series = await loadDicomFiles(expanded);
+        const rawSeries = await loadDicomFiles(expanded);
+        const series = filterVrtSeries(rawSeries);
         setSeriesList(series);
 
         if (series.length > 0) {
@@ -369,8 +379,9 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
   useEffect(() => {
     if (!isInitialized || !initialSeries || initialSeries.length === 0) return;
     if (initialFiles && initialFiles.length > 0) return; // file path wins
-    setSeriesList(initialSeries);
-    void loadSeries(initialSeries[0]);
+    const filtered = filterVrtSeries(initialSeries);
+    setSeriesList(filtered);
+    if (filtered.length > 0) void loadSeries(filtered[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized]);
 
