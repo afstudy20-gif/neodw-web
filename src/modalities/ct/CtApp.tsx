@@ -955,7 +955,7 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
             modality={activeSeries?.modality}
             defaultPreset={
               (activeSeries?.modality || '').toUpperCase() === 'CT' ? 'Bone'
-              : (activeSeries?.modality || '').toUpperCase().startsWith('MR') ? 'Default'
+              : (activeSeries?.modality || '').toUpperCase().startsWith('MR') ? 'Auto'
               : undefined
             }
             volumeKey={activeSeries?.seriesInstanceUID}

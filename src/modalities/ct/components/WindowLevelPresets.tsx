@@ -140,15 +140,35 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
       return;
     }
 
-    // MR fractional anchor → resolve against the actual volume data range.
-    // Falls back to a [0, 2000] assumption if the volume hasn't reported
-    // its range yet (early during streaming load).
+    // MR fractional anchor → resolve against the volume's real data
+    // distribution. Plain min/max windowing washes out because outliers
+    // dominate; sample the loaded scalar data and use 2nd / 98th
+    // percentiles so tissue lands in mid-gray regardless of sequence.
+    // Falls back to a [0, 2000] assumption if voxel data isn't ready yet.
     let rangeMin = 0;
     let rangeMax = 2000;
     if (isMR) {
       try {
         const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
-        if (volume?.voxelManager) {
+        const sd = volume?.scalarData as ArrayLike<number> | undefined;
+        if (sd && sd.length > 0) {
+          const N = Math.min(sd.length, 20000);
+          const stride = Math.max(1, Math.floor(sd.length / N));
+          const samples: number[] = [];
+          for (let i = 0; i < sd.length; i += stride) {
+            const v = (sd as any)[i];
+            if (Number.isFinite(v) && v > 0) samples.push(v); // drop background zeros
+          }
+          if (samples.length > 100) {
+            samples.sort((a, b) => a - b);
+            const p = (q: number) => samples[Math.min(samples.length - 1, Math.max(0, Math.floor(samples.length * q)))];
+            rangeMin = p(0.02);
+            rangeMax = p(0.98);
+          } else if (volume?.voxelManager) {
+            const range = volume.voxelManager.getRange();
+            if (range) { rangeMin = range[0]; rangeMax = range[1]; }
+          }
+        } else if (volume?.voxelManager) {
           const range = volume.voxelManager.getRange();
           if (range) { rangeMin = range[0]; rangeMax = range[1]; }
         }
