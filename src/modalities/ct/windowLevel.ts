@@ -18,14 +18,14 @@ export interface MRPreset {
 
 export const MR_PRESETS_TUNED: MRPreset[] = [
   { name: 'Default', reset: true, lowerQuantile: 0, upperQuantile: 1, description: 'DICOM WindowCenter / WindowWidth' },
-  { name: 'Auto', lowerQuantile: 0.005, upperQuantile: 0.955, minWindowFrac: 0.10, description: 'Robust tissue auto window' },
-  { name: 'T1', lowerQuantile: 0.005, upperQuantile: 0.92, minWindowFrac: 0.10, description: 'T1 weighted anatomy' },
-  { name: 'T2', lowerQuantile: 0.005, upperQuantile: 0.945, minWindowFrac: 0.10, description: 'T2 weighted fluid bright' },
-  { name: 'STIR/TIRM', lowerQuantile: 0.005, upperQuantile: 0.95, minWindowFrac: 0.10, description: 'Fat-suppressed fluid bright' },
-  { name: 'PD', lowerQuantile: 0.005, upperQuantile: 0.935, minWindowFrac: 0.10, description: 'Proton density' },
-  { name: 'FLAIR', lowerQuantile: 0.005, upperQuantile: 0.94, minWindowFrac: 0.10, description: 'Fluid attenuated inversion recovery' },
-  { name: 'DWI/ADC', lowerQuantile: 0.01, upperQuantile: 0.985, minWindowFrac: 0.12, description: 'Diffusion / ADC' },
-  { name: 'GRE/T2*', lowerQuantile: 0.005, upperQuantile: 0.94, minWindowFrac: 0.10, description: 'Gradient echo / T2 star' },
+  { name: 'Auto', lowerQuantile: 0.002, upperQuantile: 0.82, minWindowFrac: 0.08, description: 'Bright tissue auto window' },
+  { name: 'T1', lowerQuantile: 0.002, upperQuantile: 0.78, minWindowFrac: 0.08, description: 'T1 weighted anatomy' },
+  { name: 'T2', lowerQuantile: 0.002, upperQuantile: 0.82, minWindowFrac: 0.08, description: 'T2 weighted fluid bright' },
+  { name: 'STIR/TIRM', lowerQuantile: 0.002, upperQuantile: 0.86, minWindowFrac: 0.08, description: 'Fat-suppressed fluid bright' },
+  { name: 'PD', lowerQuantile: 0.002, upperQuantile: 0.82, minWindowFrac: 0.08, description: 'Proton density' },
+  { name: 'FLAIR', lowerQuantile: 0.002, upperQuantile: 0.84, minWindowFrac: 0.08, description: 'Fluid attenuated inversion recovery' },
+  { name: 'DWI/ADC', lowerQuantile: 0.005, upperQuantile: 0.90, minWindowFrac: 0.10, description: 'Diffusion / ADC' },
+  { name: 'GRE/T2*', lowerQuantile: 0.002, upperQuantile: 0.84, minWindowFrac: 0.08, description: 'Gradient echo / T2 star' },
 ];
 
 export const MR_PRESETS: Preset[] = MR_PRESETS_TUNED.map((p) => ({
@@ -135,4 +135,29 @@ export function computeMrVoiRange(
 
   if (upper <= lower) return null;
   return { lower, upper };
+}
+
+export function getScalarDataFromVolume(volume: any): ArrayLike<number> | undefined {
+  if (!volume) return undefined;
+  try {
+    const data = volume.voxelManager?.getScalarData?.();
+    if (data?.length) return data;
+  } catch { /* noop */ }
+  try {
+    const data = volume.voxelManager?.getCompleteScalarDataArray?.();
+    if (data?.length) return data;
+  } catch { /* noop */ }
+  try {
+    const data = volume.getScalarData?.();
+    if (data?.length) return data;
+  } catch { /* noop */ }
+  try {
+    const data = volume.scalarData;
+    if (data?.length) return data;
+  } catch { /* noop */ }
+  try {
+    const data = volume.imageData?.getPointData?.().getScalars?.().getData?.();
+    if (data?.length) return data;
+  } catch { /* noop */ }
+  return undefined;
 }

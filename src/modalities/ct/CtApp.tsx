@@ -34,7 +34,7 @@ import { LAAPanel, type LAAPanelHandle } from './components/LAAPanel';
 import { LVADASPanel, type LVADASPanelHandle } from './components/LVADASPanel';
 import { VascularPanel, type VascularPanelHandle } from './components/VascularPanel';
 import { SecondaryCaptureViewer } from './components/SecondaryCaptureViewer';
-import { pickDefaultWindowLevelPreset } from './windowLevel';
+import { computeMrVoiRange, getScalarDataFromVolume, pickDefaultWindowLevelPreset } from './windowLevel';
 
 // Scanner-side derived series (sag/cor reformats, MIP slabs, VRT/3D
 // snapshots, scout/SAYMA/Topogram/Localizer, Patient Protocol) are real
@@ -53,6 +53,39 @@ const RENDERING_ENGINE_ID = 'myRenderingEngine';
 const VOLUME_ID = 'cornerstoneStreamingImageVolume:myVolume';
 const VIEWPORT_IDS = ['axial', 'sagittal', 'coronal', 'volume3d'];
 const MPR_VIEWPORT_IDS = ['axial', 'sagittal', 'coronal'];
+
+function applyDefaultWindowLevelNow(series: DicomSeriesInfo, engine: cornerstone.RenderingEngine): boolean {
+  const modality = series.modality?.toUpperCase() || '';
+  if (modality === 'CT') {
+    for (const vpId of MPR_VIEWPORT_IDS) {
+      const vp = engine.getViewport(vpId) as any;
+      if (!vp || vp.type === cornerstone.Enums.ViewportType.VOLUME_3D) continue;
+      vp.setProperties?.({ voiRange: { lower: -500, upper: 1300 } });
+      vp.render?.();
+    }
+    return true;
+  }
+
+  if (modality !== 'MR' && modality !== 'MRI') return false;
+  const presetName = pickDefaultWindowLevelPreset(series) || 'Auto';
+  const volume = cornerstone.cache.getVolume(VOLUME_ID) as any;
+  const range = computeMrVoiRange(getScalarDataFromVolume(volume), presetName) || computeMrVoiRange(getScalarDataFromVolume(volume), 'Auto');
+  if (!range) return false;
+
+  for (const vpId of MPR_VIEWPORT_IDS) {
+    const vp = engine.getViewport(vpId) as any;
+    if (!vp || vp.type === cornerstone.Enums.ViewportType.VOLUME_3D) continue;
+    vp.setProperties?.({ voiRange: range, invert: false });
+    vp.render?.();
+  }
+  return true;
+}
+
+function scheduleDefaultWindowLevel(series: DicomSeriesInfo, engine: cornerstone.RenderingEngine) {
+  [0, 150, 400, 900, 1800, 3500, 7000, 12000].forEach((ms) => {
+    window.setTimeout(() => applyDefaultWindowLevelNow(series, engine), ms);
+  });
+}
 
 type RightPanel = null | '3d' | 'tavi' | 'hand-mr' | 'la' | 'aorta' | 'vascular' | 'laa' | 'lv-adas';
 
@@ -608,6 +641,7 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
         const vp = engine.getViewport(vpId);
         if (vp) vp.resetCamera();
       }
+      scheduleDefaultWindowLevel(series, engine);
       engine.renderViewports(VIEWPORT_IDS);
 
       setTimeout(() => {

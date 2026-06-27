@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import * as cornerstone from '@cornerstonejs/core';
 import {
   computeMrVoiRange,
+  getScalarDataFromVolume,
   MR_PRESETS,
   MR_PRESETS_TUNED,
   type Preset,
@@ -107,8 +108,7 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
     if (isMR && tuned) {
       try {
         const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
-        const scalarData = typeof volume?.getScalarData === 'function' ? volume.getScalarData() : volume?.scalarData;
-        mrVoiRange = computeMrVoiRange(scalarData as ArrayLike<number> | undefined, tuned.name);
+        mrVoiRange = computeMrVoiRange(getScalarDataFromVolume(volume), tuned.name);
       } catch { /* ignore */ }
       if (!mrVoiRange) return;
     }

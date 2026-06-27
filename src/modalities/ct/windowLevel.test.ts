@@ -48,8 +48,23 @@ describe('computeMrVoiRange', () => {
 
     expect(range).not.toBeNull();
     expect(range!.lower).toBeGreaterThanOrEqual(120);
-    expect(range!.upper).toBeLessThan(1200);
+    expect(range!.upper).toBeLessThan(800);
     expect(range!.upper).toBeGreaterThan(range!.lower);
+  });
+
+  it('keeps T2 SPACE bright by clipping high signal instead of using p95', () => {
+    const values = [
+      ...Array(1000).fill(0),
+      ...Array.from({ length: 7000 }, (_, i) => 80 + (i % 260)),
+      ...Array.from({ length: 2000 }, (_, i) => 420 + (i % 520)),
+      ...Array(40).fill(6000),
+    ];
+
+    const range = computeMrVoiRange(values, 'T2');
+
+    expect(range).not.toBeNull();
+    expect(range!.lower).toBeGreaterThanOrEqual(80);
+    expect(range!.upper).toBeLessThan(700);
   });
 
   it('waits instead of applying a black zero-width window when volume data is not ready', () => {
