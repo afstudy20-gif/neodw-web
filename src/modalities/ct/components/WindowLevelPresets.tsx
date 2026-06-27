@@ -27,22 +27,45 @@ const CT_PRESETS: Preset[] = [
   { name: 'Stroke', window: 40, level: 40, description: 'Narrow stroke window' },
 ];
 
-// Standard MR presets. MR signal intensity is acquisition-dependent, so
-// the applyPreset hook scales these against the volume's actual data
-// range (see `dataMax` scaling below) — values are relative anchors,
-// not absolute. Default = full auto-window from min/max.
+// MR presets. MR signal is dimensionless and sequence-dependent, so
+// fixed W/L numbers never transfer between scanners. Anchors here are
+// expressed as fractions of the volume's actual data range (window =
+// fraction of range, level = fraction of range from min). applyPreset
+// reads the loaded volume's min/max and produces absolute W/L per study.
 //
-// Refs:
+// "Default" is special: it triggers viewport.resetProperties() to fall
+// back to the WindowCenter/WindowWidth the scanner baked into the DICOM
+// header — the most reliable starting point for any sequence.
+//
+// Tuned fractions are based on:
 //   https://radiopaedia.org/articles/window-and-level
 //   Horos MR presets (T1, T2, STIR, PD)
-const MR_PRESETS: Preset[] = [
-  { name: 'Default', window: 2000, level: 1000, description: 'Auto W/L from data range' },
-  { name: 'T1', window: 600, level: 300, description: 'T1 weighted — anatomy' },
-  { name: 'T2', window: 1500, level: 750, description: 'T2 weighted — fluid bright' },
-  { name: 'STIR', window: 1800, level: 900, description: 'Fat-suppressed / fluid' },
-  { name: 'PD', window: 1200, level: 600, description: 'Proton density' },
-  { name: 'Bright', window: 800, level: 400, description: 'High contrast overview' },
+//   OHIF default MR hanging protocols
+interface MRPreset {
+  name: string;
+  windowFrac: number;  // fraction of (max - min) used as window width
+  levelFrac: number;   // 0..1, where in the range to center
+  description: string;
+  reset?: boolean;     // ignore frac fields; fall back to DICOM-baked W/L
+}
+const MR_PRESETS_TUNED: MRPreset[] = [
+  { name: 'Default',   reset: true,                                 windowFrac: 0, levelFrac: 0, description: 'DICOM WindowCenter / WindowWidth' },
+  { name: 'Auto',      windowFrac: 0.80, levelFrac: 0.30, description: 'Auto-fit to full data range' },
+  { name: 'T1',        windowFrac: 0.45, levelFrac: 0.25, description: 'T1 weighted — anatomy' },
+  { name: 'T2',        windowFrac: 0.70, levelFrac: 0.30, description: 'T2 weighted — fluid bright' },
+  { name: 'STIR/TIRM', windowFrac: 0.85, levelFrac: 0.35, description: 'Fat-suppressed / fluid' },
+  { name: 'PD',        windowFrac: 0.55, levelFrac: 0.30, description: 'Proton density' },
+  { name: 'Dark',      windowFrac: 0.35, levelFrac: 0.18, description: 'Tighter window, darker tissue' },
 ];
+// Surface the same shape as CT presets to the rest of the component
+// (the dropdown UI iterates over name/window/level/description). The
+// fractional intent is consumed by applyPreset below.
+const MR_PRESETS: Preset[] = MR_PRESETS_TUNED.map((p) => ({
+  name: p.name,
+  window: Math.round(p.windowFrac * 2000),
+  level: Math.round(p.levelFrac * 2000),
+  description: p.description,
+}));
 
 // Colormaps — VTK.js preset names
 const COLORMAPS = [
@@ -100,13 +123,34 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
     if (!engine) return;
 
     const isMR = (mod === 'MR' || mod === 'MRI');
-    let dataMax = 2000;
+
+    // MR "Default" → reset to the DICOM-baked WindowCenter/WindowWidth.
+    // Most reliable starting point because MR signal scales are
+    // sequence- and scanner-dependent and no fixed W/L generalises.
+    const tuned = isMR ? MR_PRESETS_TUNED.find((p) => p.name === preset.name) : undefined;
+    if (tuned?.reset) {
+      for (const vpId of getAllTargetVpIds()) {
+        const viewport = engine.getViewport(vpId) as any;
+        if (!viewport || viewport.type === cornerstone.Enums.ViewportType.VOLUME_3D) continue;
+        try { viewport.resetProperties?.(); } catch { /* ignore */ }
+        viewport.render();
+      }
+      setActivePreset(preset.name);
+      setIsOpen(false);
+      return;
+    }
+
+    // MR fractional anchor → resolve against the actual volume data range.
+    // Falls back to a [0, 2000] assumption if the volume hasn't reported
+    // its range yet (early during streaming load).
+    let rangeMin = 0;
+    let rangeMax = 2000;
     if (isMR) {
       try {
         const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
         if (volume?.voxelManager) {
           const range = volume.voxelManager.getRange();
-          if (range) dataMax = range[1];
+          if (range) { rangeMin = range[0]; rangeMax = range[1]; }
         }
       } catch { /* ignore */ }
     }
@@ -115,17 +159,22 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
       const viewport = engine.getViewport(vpId);
       if (!viewport || viewport.type === cornerstone.Enums.ViewportType.VOLUME_3D) continue;
 
-      let w = preset.window;
-      let l = preset.level;
-      if (isMR) {
-        const scale = dataMax / 2000;
-        w = Math.round(preset.window * scale);
-        l = Math.round(preset.level * scale);
+      let lower: number;
+      let upper: number;
+      if (isMR && tuned) {
+        const span = rangeMax - rangeMin;
+        const w = tuned.windowFrac * span;
+        const l = rangeMin + tuned.levelFrac * span;
+        lower = l - w / 2;
+        upper = l + w / 2;
+      } else {
+        const w = preset.window;
+        const l = preset.level;
+        lower = l - w / 2;
+        upper = l + w / 2;
       }
 
-      (viewport as any).setProperties({
-        voiRange: { lower: l - w / 2, upper: l + w / 2 },
-      });
+      (viewport as any).setProperties({ voiRange: { lower, upper } });
       viewport.render();
     }
     setActivePreset(preset.name);

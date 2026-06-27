@@ -953,7 +953,11 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
             renderingEngineId={RENDERING_ENGINE_ID}
             viewportIds={MPR_VIEWPORT_IDS}
             modality={activeSeries?.modality}
-            defaultPreset={(activeSeries?.modality || '').toUpperCase() === 'CT' ? 'Bone' : undefined}
+            defaultPreset={
+              (activeSeries?.modality || '').toUpperCase() === 'CT' ? 'Bone'
+              : (activeSeries?.modality || '').toUpperCase().startsWith('MR') ? 'Default'
+              : undefined
+            }
             volumeKey={activeSeries?.seriesInstanceUID}
           />
           <div className="toolbar-divider" />
