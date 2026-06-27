@@ -254,42 +254,32 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
     }
   }, [invertColors, renderingEngineId, viewportIds]);
 
-  // Auto-apply the configured default preset once per volume. Waits for
-  // both the viewport to mount AND the volume's scalar data to start
-  // populating — otherwise the MR "Auto" preset resolves against a
-  // stale or empty range and produces a near-black window. 30s ceiling
-  // covers slow networks loading a 300-slice 3D MR volume.
+  // Auto-apply the configured default preset on every series switch.
+  // Streaming volumes don't expose a reliable "loaded" signal that's
+  // safe to listen to from React — and the percentile sampler in
+  // applyPreset returns the wrong window when scalarData is still empty.
+  // Brute-force solve: schedule multiple applies at increasing offsets.
+  // Each call re-resolves the VOI against whatever data is loaded so
+  // far; the last one runs once the streaming volume is fully populated
+  // and produces the final, correct window. Cheap (each apply is just a
+  // typed-array sample + setProperties call) and dependable.
   useEffect(() => {
     if (!defaultPreset || !volumeKey) return;
     const preset = PRESETS.find((p) => p.name === defaultPreset);
     if (!preset) return;
-    const isMR = (mod === 'MR' || mod === 'MRI');
-    let cancelled = false;
-    let attempts = 0;
-    const tick = () => {
-      if (cancelled) return;
-      const engine = cornerstone.getRenderingEngine(renderingEngineId);
-      const viewportReady = engine && getAllTargetVpIds().some((id) => {
-        try { return !!engine.getViewport(id); } catch { return false; }
-      });
-      let volumeReady = true;
-      if (isMR && viewportReady) {
-        try {
-          const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
-          const sd = volume?.scalarData as ArrayLike<number> | undefined;
-          volumeReady = !!sd && sd.length > 1000;
-        } catch { volumeReady = false; }
-      }
-      if (viewportReady && volumeReady) {
-        applyPreset(preset);
-      } else if (attempts < 150) {
-        attempts += 1;
-        setTimeout(tick, 200);
-      }
-    };
-    const start = setTimeout(tick, 200);
-    return () => { cancelled = true; clearTimeout(start); };
-  }, [volumeKey, defaultPreset, PRESETS, renderingEngineId, getAllTargetVpIds, applyPreset, mod]);
+    const offsets = [800, 2500, 5000, 10000];
+    const timers = offsets.map((ms) =>
+      setTimeout(() => {
+        const engine = cornerstone.getRenderingEngine(renderingEngineId);
+        if (!engine) return;
+        const ready = getAllTargetVpIds().some((id) => {
+          try { return !!engine.getViewport(id); } catch { return false; }
+        });
+        if (ready) applyPreset(preset);
+      }, ms),
+    );
+    return () => { timers.forEach(clearTimeout); };
+  }, [volumeKey, defaultPreset, PRESETS, renderingEngineId, getAllTargetVpIds, applyPreset]);
 
   // Number key shortcuts (1-9) for presets
   useEffect(() => {
