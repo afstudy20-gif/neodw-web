@@ -20,6 +20,16 @@ const TAG = {
   ImagePositionPatient: '00200032',
   SliceLocation: '00201041',
   NumberOfFrames: '00280008',
+  ImageType: '00080008',
+  ScanningSequence: '00180020',
+  SequenceVariant: '00180021',
+  ScanOptions: '00180022',
+  MRAcquisitionType: '00180023',
+  SequenceName: '00180024',
+  RepetitionTime: '00180080',
+  EchoTime: '00180081',
+  InversionTime: '00180082',
+  FlipAngle: '00181314',
 } as const;
 
 function firstValue<T = string>(meta: InstanceMetadata, tag: string): T | undefined {
@@ -142,6 +152,7 @@ export async function loadDicomWebStudy(src: DicomWebSource): Promise<DicomSerie
     }
 
     const first = seriesEntry;
+    const firstInstance = instanceMetas[0] || first;
     out.push({
       seriesInstanceUID: seriesUID,
       seriesDescription: firstValue(first, TAG.SeriesDescription) || `${modality} series`,
@@ -151,6 +162,16 @@ export async function loadDicomWebStudy(src: DicomWebSource): Promise<DicomSerie
       patientName: firstValue(first, TAG.PatientName) || 'Unknown',
       studyDescription: firstValue(first, TAG.StudyDescription) || '',
       studyDate: firstValue(first, TAG.StudyDate) || '',
+      imageType: allValues(firstInstance, TAG.ImageType).join('\\'),
+      sequenceName: firstValue(firstInstance, TAG.SequenceName) || '',
+      scanningSequence: allValues(firstInstance, TAG.ScanningSequence).join('\\'),
+      sequenceVariant: allValues(firstInstance, TAG.SequenceVariant).join('\\'),
+      scanOptions: allValues(firstInstance, TAG.ScanOptions).join('\\'),
+      mrAcquisitionType: firstValue(firstInstance, TAG.MRAcquisitionType) || '',
+      repetitionTime: String(firstValue(firstInstance, TAG.RepetitionTime) || ''),
+      echoTime: String(firstValue(firstInstance, TAG.EchoTime) || ''),
+      inversionTime: String(firstValue(firstInstance, TAG.InversionTime) || ''),
+      flipAngle: String(firstValue(firstInstance, TAG.FlipAngle) || ''),
     });
   }
 

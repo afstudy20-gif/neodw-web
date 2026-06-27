@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import * as cornerstone from '@cornerstonejs/core';
-
-interface Preset {
-  name: string;
-  window: number;
-  level: number;
-  description: string;
-}
+import {
+  computeMrVoiRange,
+  MR_PRESETS,
+  MR_PRESETS_TUNED,
+  type Preset,
+} from '../windowLevel';
 
 // Standard radiology CT W/L presets. Values follow Radiopaedia /
 // Horos / OsiriX defaults so radiologists see familiar windows out of
@@ -27,45 +26,9 @@ const CT_PRESETS: Preset[] = [
   { name: 'Stroke', window: 40, level: 40, description: 'Narrow stroke window' },
 ];
 
-// MR presets. MR signal is dimensionless and sequence-dependent, so
-// fixed W/L numbers never transfer between scanners. Anchors here are
-// expressed as fractions of the volume's actual data range (window =
-// fraction of range, level = fraction of range from min). applyPreset
-// reads the loaded volume's min/max and produces absolute W/L per study.
-//
-// "Default" is special: it triggers viewport.resetProperties() to fall
-// back to the WindowCenter/WindowWidth the scanner baked into the DICOM
-// header — the most reliable starting point for any sequence.
-//
-// Tuned fractions are based on:
-//   https://radiopaedia.org/articles/window-and-level
-//   Horos MR presets (T1, T2, STIR, PD)
-//   OHIF default MR hanging protocols
-interface MRPreset {
-  name: string;
-  windowFrac: number;  // fraction of (max - min) used as window width
-  levelFrac: number;   // 0..1, where in the range to center
-  description: string;
-  reset?: boolean;     // ignore frac fields; fall back to DICOM-baked W/L
-}
-const MR_PRESETS_TUNED: MRPreset[] = [
-  { name: 'Default',   reset: true,                                 windowFrac: 0, levelFrac: 0, description: 'DICOM WindowCenter / WindowWidth' },
-  { name: 'Auto',      windowFrac: 1.10, levelFrac: 0.45, description: 'Auto-fit to tissue percentile' },
-  { name: 'T1',        windowFrac: 0.45, levelFrac: 0.25, description: 'T1 weighted — anatomy' },
-  { name: 'T2',        windowFrac: 0.70, levelFrac: 0.30, description: 'T2 weighted — fluid bright' },
-  { name: 'STIR/TIRM', windowFrac: 0.85, levelFrac: 0.35, description: 'Fat-suppressed / fluid' },
-  { name: 'PD',        windowFrac: 0.55, levelFrac: 0.30, description: 'Proton density' },
-  { name: 'Dark',      windowFrac: 0.35, levelFrac: 0.18, description: 'Tighter window, darker tissue' },
-];
-// Surface the same shape as CT presets to the rest of the component
-// (the dropdown UI iterates over name/window/level/description). The
-// fractional intent is consumed by applyPreset below.
-const MR_PRESETS: Preset[] = MR_PRESETS_TUNED.map((p) => ({
-  name: p.name,
-  window: Math.round(p.windowFrac * 2000),
-  level: Math.round(p.levelFrac * 2000),
-  description: p.description,
-}));
+// MR signal is dimensionless and sequence-dependent, so fixed W/L
+// numbers never transfer between scanners. MR presets resolve against
+// robust voxel percentiles in windowLevel.ts.
 
 // Colormaps — VTK.js preset names
 const COLORMAPS = [
@@ -140,39 +103,13 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
       return;
     }
 
-    // MR fractional anchor → resolve against the volume's real data
-    // distribution. Plain min/max windowing washes out because outliers
-    // dominate; sample the loaded scalar data and use 2nd / 98th
-    // percentiles so tissue lands in mid-gray regardless of sequence.
-    // Falls back to a [0, 2000] assumption if voxel data isn't ready yet.
-    let rangeMin = 0;
-    let rangeMax = 2000;
-    if (isMR) {
+    let mrVoiRange: { lower: number; upper: number } | null = null;
+    if (isMR && tuned) {
       try {
         const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
-        const sd = volume?.scalarData as ArrayLike<number> | undefined;
-        if (sd && sd.length > 0) {
-          const N = Math.min(sd.length, 20000);
-          const stride = Math.max(1, Math.floor(sd.length / N));
-          const samples: number[] = [];
-          for (let i = 0; i < sd.length; i += stride) {
-            const v = (sd as any)[i];
-            if (Number.isFinite(v) && v > 0) samples.push(v); // drop background zeros
-          }
-          if (samples.length > 100) {
-            samples.sort((a, b) => a - b);
-            const p = (q: number) => samples[Math.min(samples.length - 1, Math.max(0, Math.floor(samples.length * q)))];
-            rangeMin = p(0.02);
-            rangeMax = p(0.98);
-          } else if (volume?.voxelManager) {
-            const range = volume.voxelManager.getRange();
-            if (range) { rangeMin = range[0]; rangeMax = range[1]; }
-          }
-        } else if (volume?.voxelManager) {
-          const range = volume.voxelManager.getRange();
-          if (range) { rangeMin = range[0]; rangeMax = range[1]; }
-        }
+        mrVoiRange = computeMrVoiRange(volume?.scalarData as ArrayLike<number> | undefined, tuned.name);
       } catch { /* ignore */ }
+      if (!mrVoiRange) return;
     }
 
     for (const vpId of getAllTargetVpIds()) {
@@ -181,12 +118,9 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
 
       let lower: number;
       let upper: number;
-      if (isMR && tuned) {
-        const span = rangeMax - rangeMin;
-        const w = tuned.windowFrac * span;
-        const l = rangeMin + tuned.levelFrac * span;
-        lower = l - w / 2;
-        upper = l + w / 2;
+      if (isMR && tuned && mrVoiRange) {
+        lower = mrVoiRange.lower;
+        upper = mrVoiRange.upper;
       } else {
         const w = preset.window;
         const l = preset.level;
