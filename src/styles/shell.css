@@ -1700,3 +1700,21 @@ button { font: inherit; border: 0; cursor: pointer; background: transparent; col
 .open-btn.danger:hover:not(:disabled) {
   background: color-mix(in oklch, #e74c3c 12%, transparent);
 }
+
+/* ── PatientsPanel tabs (Hastalar / Çöp) ───────────────── */
+.patients-tabs {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 12px;
+}
+.patients-tab {
+  background: none; border: 1px solid transparent;
+  padding: 6px 12px; border-radius: 6px;
+  color: var(--nd-ink-3); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: color .12s, background .12s, border-color .12s;
+}
+.patients-tab:hover { color: var(--nd-ink); }
+.patients-tab.active {
+  color: var(--nd-primary);
+  background: color-mix(in oklch, var(--nd-primary) 10%, transparent);
+  border-color: color-mix(in oklch, var(--nd-primary) 30%, transparent);
+}

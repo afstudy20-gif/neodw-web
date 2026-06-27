@@ -1,5 +1,8 @@
 import { useEffect, useState, useCallback, useRef, type DragEvent } from 'react';
-import { listStudies, deleteStudy, uploadInstance, type StudyDetail } from '../shared/orthanc/api';
+import {
+  listStudies, trashStudy, restoreStudy, purgeStudy, uploadInstance,
+  type StudyDetail, type StudyScope,
+} from '../shared/orthanc/api';
 
 interface Props {
   /** Called when the user clicks Open on a study. The viewer then mounts
@@ -8,6 +11,7 @@ interface Props {
 }
 
 export function PatientsPanel({ onOpenStudy }: Props) {
+  const [scope, setScope] = useState<StudyScope>('active');
   const [studies, setStudies] = useState<StudyDetail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -17,8 +21,9 @@ export function PatientsPanel({ onOpenStudy }: Props) {
 
   const refresh = useCallback(async () => {
     setError(null);
+    setStudies(null);
     try {
-      const list = await listStudies();
+      const list = await listStudies(scope);
       // Patient name + descending studyDate so newest land on top.
       list.sort((a, b) => (b.studyDate || '').localeCompare(a.studyDate || ''));
       setStudies(list);
@@ -27,27 +32,68 @@ export function PatientsPanel({ onOpenStudy }: Props) {
       setError(msg);
       setStudies([]);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const handleDelete = useCallback(async (study: StudyDetail) => {
-    const label = `${study.patientName} — ${study.studyDescription || study.studyDate}`;
-    if (!window.confirm(`"${label}" study'sini silmek istiyor musun?\nBu işlem geri alınamaz.`)) return;
-    setBusyIds((prev) => new Set(prev).add(study.id));
+  const withBusy = useCallback(async (id: string, op: () => Promise<void>) => {
+    setBusyIds((prev) => new Set(prev).add(id));
     try {
-      await deleteStudy(study.id);
-      setStudies((prev) => prev?.filter((s) => s.id !== study.id) ?? null);
-    } catch (err) {
-      window.alert(`Silme başarısız: ${err instanceof Error ? err.message : err}`);
+      await op();
     } finally {
       setBusyIds((prev) => {
         const next = new Set(prev);
-        next.delete(study.id);
+        next.delete(id);
         return next;
       });
     }
   }, []);
+
+  const handleTrash = useCallback(async (study: StudyDetail) => {
+    const label = `${study.patientName} — ${study.studyDescription || study.studyDate}`;
+    if (!window.confirm(`"${label}" study'sini Çöp'e taşı?\nGeri Al ile geri getirebilirsin.`)) return;
+    await withBusy(study.id, async () => {
+      try {
+        await trashStudy(study.id);
+        setStudies((prev) => prev?.filter((s) => s.id !== study.id) ?? null);
+      } catch (err) {
+        window.alert(`Çöpe taşıma başarısız: ${err instanceof Error ? err.message : err}`);
+      }
+    });
+  }, [withBusy]);
+
+  const handleRestore = useCallback(async (study: StudyDetail) => {
+    await withBusy(study.id, async () => {
+      try {
+        await restoreStudy(study.id);
+        setStudies((prev) => prev?.filter((s) => s.id !== study.id) ?? null);
+      } catch (err) {
+        window.alert(`Geri alma başarısız: ${err instanceof Error ? err.message : err}`);
+      }
+    });
+  }, [withBusy]);
+
+  const handlePurge = useCallback(async (study: StudyDetail) => {
+    const label = `${study.patientName} — ${study.studyDescription || study.studyDate}`;
+    if (!window.confirm(`"${label}" KALICI olarak silinecek.\nBu işlem geri alınamaz. Emin misin?`)) return;
+    await withBusy(study.id, async () => {
+      try {
+        await purgeStudy(study.id);
+        setStudies((prev) => prev?.filter((s) => s.id !== study.id) ?? null);
+      } catch (err) {
+        window.alert(`Kalıcı silme başarısız: ${err instanceof Error ? err.message : err}`);
+      }
+    });
+  }, [withBusy]);
+
+  const handleEmptyTrash = useCallback(async () => {
+    if (!studies || studies.length === 0) return;
+    if (!window.confirm(`Çöp'teki ${studies.length} study KALICI olarak silinecek.\nBu işlem geri alınamaz. Emin misin?`)) return;
+    for (const s of studies) {
+      try { await purgeStudy(s.id); } catch { /* keep going */ }
+    }
+    void refresh();
+  }, [studies, refresh]);
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const arr = Array.from(files);
@@ -93,16 +139,33 @@ export function PatientsPanel({ onOpenStudy }: Props) {
     return 'ct';
   }
 
+  const isTrash = scope === 'trash';
+
   return (
     <div className="patients-panel">
-      <div className="patients-head">
-        <div className="cap" style={{ fontWeight: 600 }}>
-          Server'daki Hastalar {studies != null && <span style={{ opacity: 0.6, fontWeight: 400 }}>· {studies.length}</span>}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div className="patients-tabs">
+        <button
+          className={`patients-tab ${!isTrash ? 'active' : ''}`}
+          onClick={() => setScope('active')}
+        >
+          Hastalar
+        </button>
+        <button
+          className={`patients-tab ${isTrash ? 'active' : ''}`}
+          onClick={() => setScope('trash')}
+        >
+          Çöp
+        </button>
+        <div style={{ flex: 1 }} />
+        {!isTrash && (
           <button className="open-btn" onClick={() => fileInputRef.current?.click()}>+ Yükle</button>
-          <button className="open-btn" onClick={refresh} title="Listeyi yenile">↻</button>
-        </div>
+        )}
+        {isTrash && studies && studies.length > 0 && (
+          <button className="open-btn danger" onClick={handleEmptyTrash} title="Çöp'teki her şeyi kalıcı sil">
+            Çöp'ü Boşalt
+          </button>
+        )}
+        <button className="open-btn" onClick={refresh} title="Listeyi yenile">↻</button>
         <input
           ref={fileInputRef}
           type="file"
@@ -116,25 +179,27 @@ export function PatientsPanel({ onOpenStudy }: Props) {
         />
       </div>
 
-      <div
-        className={`upload-zone ${dragOver ? 'drag' : ''}`}
-        onDrop={onDrop}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-      >
-        {uploadState ? (
-          <div>
-            <div style={{ marginBottom: 4 }}>
-              Yükleniyor — {uploadState.done}/{uploadState.total}{uploadState.failed > 0 && ` (${uploadState.failed} hata)`}
+      {!isTrash && (
+        <div
+          className={`upload-zone ${dragOver ? 'drag' : ''}`}
+          onDrop={onDrop}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+        >
+          {uploadState ? (
+            <div>
+              <div style={{ marginBottom: 4 }}>
+                Yükleniyor — {uploadState.done}/{uploadState.total}{uploadState.failed > 0 && ` (${uploadState.failed} hata)`}
+              </div>
+              <div className="upload-progress">
+                <div className="upload-progress-bar" style={{ width: `${Math.round(100 * uploadState.done / uploadState.total)}%` }} />
+              </div>
             </div>
-            <div className="upload-progress">
-              <div className="upload-progress-bar" style={{ width: `${Math.round(100 * uploadState.done / uploadState.total)}%` }} />
-            </div>
-          </div>
-        ) : (
-          <div>DICOM klasörünü / dosyalarını buraya sürükle veya <button type="button" className="link-btn" onClick={() => fileInputRef.current?.click()}>seç</button></div>
-        )}
-      </div>
+          ) : (
+            <div>DICOM klasörünü / dosyalarını buraya sürükle veya <button type="button" className="link-btn" onClick={() => fileInputRef.current?.click()}>seç</button></div>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="patients-error">
@@ -147,7 +212,9 @@ export function PatientsPanel({ onOpenStudy }: Props) {
       )}
 
       {studies != null && studies.length === 0 && !error && (
-        <div className="patients-empty">Henüz hasta yok. Yukarıya DICOM dosyalarını sürükle.</div>
+        <div className="patients-empty">
+          {isTrash ? 'Çöp boş.' : 'Henüz hasta yok. Yukarıya DICOM dosyalarını sürükle.'}
+        </div>
       )}
 
       {studies != null && studies.length > 0 && (
@@ -167,21 +234,44 @@ export function PatientsPanel({ onOpenStudy }: Props) {
                   </div>
                 </div>
                 <div className="patient-actions">
-                  <button
-                    className="open-btn primary"
-                    disabled={busy}
-                    onClick={() => onOpenStudy(s, mod)}
-                  >
-                    Aç ({mod.toUpperCase()})
-                  </button>
-                  <button
-                    className="open-btn danger"
-                    disabled={busy}
-                    onClick={() => void handleDelete(s)}
-                    title="Bu study'yi sil"
-                  >
-                    Sil
-                  </button>
+                  {!isTrash ? (
+                    <>
+                      <button
+                        className="open-btn primary"
+                        disabled={busy}
+                        onClick={() => onOpenStudy(s, mod)}
+                      >
+                        Aç ({mod.toUpperCase()})
+                      </button>
+                      <button
+                        className="open-btn danger"
+                        disabled={busy}
+                        onClick={() => void handleTrash(s)}
+                        title="Bu study'yi Çöp'e taşı"
+                      >
+                        Sil
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="open-btn"
+                        disabled={busy}
+                        onClick={() => void handleRestore(s)}
+                        title="Çöp'ten geri al"
+                      >
+                        Geri Al
+                      </button>
+                      <button
+                        className="open-btn danger"
+                        disabled={busy}
+                        onClick={() => void handlePurge(s)}
+                        title="Kalıcı olarak sil"
+                      >
+                        Kalıcı Sil
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );

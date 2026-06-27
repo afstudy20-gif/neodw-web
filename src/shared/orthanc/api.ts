@@ -5,6 +5,13 @@
 
 const ORTHANC = '/orthanc';
 
+/** Studies labelled with this tag are hidden from the main list and
+ *  surfaced under the "Trash" view. Restore removes the label; Purge
+ *  hits the real DELETE. */
+export const TRASH_LABEL = 'trash';
+
+export type StudyScope = 'active' | 'trash';
+
 export interface StudyDetail {
   id: string;
   patientName: string;
@@ -14,6 +21,7 @@ export interface StudyDetail {
   modalities: string[];
   numSeries: number;
   numInstances: number;
+  labels: string[];
 }
 
 interface OrthancStudy {
@@ -25,6 +33,7 @@ interface OrthancStudy {
   };
   PatientMainDicomTags?: { PatientName?: string };
   Series?: string[];
+  Labels?: string[];
 }
 
 interface OrthancSeries {
@@ -38,9 +47,25 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-/** GET /studies → list of internal study IDs. */
-export async function listStudyIds(): Promise<string[]> {
-  return fetchJson<string[]>('/studies');
+/** POST /tools/find scoped to studies. LabelsConstraint controls the
+ *  filter: 'All' returns studies that carry every listed label,
+ *  'None' returns studies that carry none of them — letting us split
+ *  the corpus into active vs trash views without a client-side filter. */
+async function findStudyIds(scope: StudyScope): Promise<string[]> {
+  const body = {
+    Level: 'Study',
+    Query: {},
+    Expand: false,
+    Labels: [TRASH_LABEL],
+    LabelsConstraint: scope === 'trash' ? 'All' : 'None',
+  };
+  const res = await fetch(`${ORTHANC}/tools/find`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`tools/find failed: ${res.status}`);
+  return res.json() as Promise<string[]>;
 }
 
 /** GET /studies/{id} → enriched detail used by the patient list UI. */
@@ -71,20 +96,36 @@ export async function getStudyDetail(id: string): Promise<StudyDetail> {
     modalities: Array.from(modalities).sort(),
     numSeries: seriesIds.length,
     numInstances,
+    labels: s.Labels || [],
   };
 }
 
-/** Convenience: one round-trip to list every study with detail. */
-export async function listStudies(): Promise<StudyDetail[]> {
-  const ids = await listStudyIds();
+/** List every study in the given scope ("active" excludes trashed,
+ *  "trash" returns only trashed). One round-trip per study to enrich
+ *  with series detail. */
+export async function listStudies(scope: StudyScope = 'active'): Promise<StudyDetail[]> {
+  const ids = await findStudyIds(scope);
   const details = await Promise.all(ids.map((id) => getStudyDetail(id).catch(() => null)));
   return details.filter((s): s is StudyDetail => s !== null);
 }
 
-/** DELETE /studies/{id} — removes every series + instance under the study. */
-export async function deleteStudy(id: string): Promise<void> {
+/** Soft-delete: tag the study with the trash label. Reversible via
+ *  restoreStudy. The DICOM data stays on disk until purgeStudy runs. */
+export async function trashStudy(id: string): Promise<void> {
+  const res = await fetch(`${ORTHANC}/studies/${id}/labels/${TRASH_LABEL}`, { method: 'PUT' });
+  if (!res.ok) throw new Error(`Trash failed: ${res.status}`);
+}
+
+/** Move a study out of the trash by removing its trash label. */
+export async function restoreStudy(id: string): Promise<void> {
+  const res = await fetch(`${ORTHANC}/studies/${id}/labels/${TRASH_LABEL}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Restore failed: ${res.status}`);
+}
+
+/** Permanently delete a study and free its disk space. Irreversible. */
+export async function purgeStudy(id: string): Promise<void> {
   const res = await fetch(`${ORTHANC}/studies/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+  if (!res.ok) throw new Error(`Purge failed: ${res.status}`);
 }
 
 /** POST /instances — upload a single DICOM file as raw bytes. */
