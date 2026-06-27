@@ -90,11 +90,8 @@ function scheduleDefaultWindowLevel(series: DicomSeriesInfo, engine: cornerstone
 function applyStackWindowLevel(series: DicomSeriesInfo, viewport: cornerstone.Types.IStackViewport) {
   const modality = series.modality?.toUpperCase() || '';
   if (modality === 'MR' || modality === 'MRI') {
-    const presetName = pickDefaultWindowLevelPreset(series) || 'Auto';
-    const range = computeMrVoiRange(undefined, presetName) || computeMrVoiRange(undefined, 'Auto');
-    if (range) {
-      (viewport as any).setProperties?.({ voiRange: range, invert: false });
-    }
+    viewport.resetProperties();
+    (viewport as any).setProperties?.({ invert: false });
   } else if (modality === 'CT') {
     (viewport as any).setProperties?.({ voiRange: { lower: -500, upper: 1300 } });
   }
