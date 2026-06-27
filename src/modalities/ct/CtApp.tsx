@@ -715,8 +715,12 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
     resizeViewports({ resetCrosshairs: mode !== 'tavi-oblique' });
   }, [resizeViewports]);
 
-  const showSegmentationHeaderActions = rightPanel !== 'tavi';
-  const showWorkflowSwitcher = rightPanel !== 'tavi';
+  // Slim viewer: spine CT/MR review only. Cardiac panels (TAVI, LA/LAA,
+  // Aorta/Vascular, LV-ADAS, Hand MR) and their Save/Open shortcuts plus
+  // Pseudo-PCCT are hidden — the buttons stay in the source so a future
+  // re-enable is a one-flag flip, no dead-code surgery.
+  const showSegmentationHeaderActions = false;
+  const showWorkflowSwitcher = false;
 
   return (
     <div className="app">
