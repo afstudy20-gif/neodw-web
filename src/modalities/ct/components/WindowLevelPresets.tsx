@@ -107,7 +107,8 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
     if (isMR && tuned) {
       try {
         const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
-        mrVoiRange = computeMrVoiRange(volume?.scalarData as ArrayLike<number> | undefined, tuned.name);
+        const scalarData = typeof volume?.getScalarData === 'function' ? volume.getScalarData() : volume?.scalarData;
+        mrVoiRange = computeMrVoiRange(scalarData as ArrayLike<number> | undefined, tuned.name);
       } catch { /* ignore */ }
       if (!mrVoiRange) return;
     }

@@ -29,9 +29,11 @@ interface Props {
   onReset?: () => void;
   onSwitchToMPR?: () => void;
   isStack2D?: boolean;
+  modality?: string;
+  volumeKey?: string;
 }
 
-export function Toolbar({ renderingEngineId, onReset, onSwitchToMPR, isStack2D }: Props) {
+export function Toolbar({ renderingEngineId, onReset, onSwitchToMPR, isStack2D, modality, volumeKey }: Props) {
   const [activeTool, setActive] = useState<ToolName>('Crosshairs');
   const [slabMode, setSlabMode] = useState<SlabMode>('mip');
   const [slabThickness, setSlabThickness] = useState(5);
@@ -101,6 +103,16 @@ export function Toolbar({ renderingEngineId, onReset, onSwitchToMPR, isStack2D }
   useEffect(() => {
     applySlabProjection(slabMode, slabThickness);
   }, [applySlabProjection, slabMode, slabThickness]);
+
+  useEffect(() => {
+    if (!volumeKey || isStack2D) return;
+    const mod = modality?.trim().toUpperCase();
+    const nextMode: SlabMode = mod === 'MR' || mod === 'MRI' ? 'avg' : 'mip';
+    const nextThickness = mod === 'MR' || mod === 'MRI' ? 3 : 5;
+    setSlabMode(nextMode);
+    setSlabThickness(nextThickness);
+    window.setTimeout(() => applySlabProjection(nextMode, nextThickness), 0);
+  }, [volumeKey, modality, isStack2D, applySlabProjection]);
 
   const handleReset = useCallback(() => {
     if (onReset) onReset();

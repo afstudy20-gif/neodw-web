@@ -927,7 +927,11 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
 
       {activeSeries && (
         <div className="toolbar-row">
-          <Toolbar renderingEngineId={RENDERING_ENGINE_ID} isStack2D={viewportMode === 'stack-2d'}
+          <Toolbar
+            renderingEngineId={RENDERING_ENGINE_ID}
+            isStack2D={viewportMode === 'stack-2d'}
+            modality={activeSeries?.modality}
+            volumeKey={activeSeries?.seriesInstanceUID}
             onSwitchToMPR={() => { if (activeSeries) loadSeries(activeSeries); }}
             onReset={() => {
             // Full baseline reset: exit TAVI mode, close panels, restore standard view
