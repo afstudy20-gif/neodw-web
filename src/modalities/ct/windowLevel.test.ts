@@ -37,7 +37,7 @@ describe('pickDefaultWindowLevelPreset', () => {
 });
 
 describe('computeMrVoiRange', () => {
-  it('uses tissue percentiles and ignores zero background plus bright outliers', () => {
+  it('uses a bright narrow T1 window instead of scanner-wide MR defaults', () => {
     const values = [
       ...Array(500).fill(0),
       ...Array.from({ length: 9000 }, (_, i) => 120 + (i % 700)),
@@ -47,12 +47,10 @@ describe('computeMrVoiRange', () => {
     const range = computeMrVoiRange(values, 'T1');
 
     expect(range).not.toBeNull();
-    expect(range!.lower).toBeGreaterThanOrEqual(120);
-    expect(range!.upper).toBeLessThan(800);
-    expect(range!.upper).toBeGreaterThan(range!.lower);
+    expect(range).toEqual({ lower: -2, upper: 32 });
   });
 
-  it('keeps T2 SPACE bright by clipping high signal instead of using p95', () => {
+  it('keeps T2 SPACE bright with the requested W34 L15 style window', () => {
     const values = [
       ...Array(1000).fill(0),
       ...Array.from({ length: 7000 }, (_, i) => 80 + (i % 260)),
@@ -63,11 +61,10 @@ describe('computeMrVoiRange', () => {
     const range = computeMrVoiRange(values, 'T2');
 
     expect(range).not.toBeNull();
-    expect(range!.lower).toBeGreaterThanOrEqual(80);
-    expect(range!.upper).toBeLessThan(700);
+    expect(range).toEqual({ lower: -2, upper: 32 });
   });
 
-  it('waits instead of applying a black zero-width window when volume data is not ready', () => {
-    expect(computeMrVoiRange(Array(64).fill(0), 'T2')).toBeNull();
+  it('does not apply a black zero-width window when volume data is not ready', () => {
+    expect(computeMrVoiRange(undefined, 'T2')).toBeNull();
   });
 });
