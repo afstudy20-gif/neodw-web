@@ -8,28 +8,40 @@ interface Preset {
   description: string;
 }
 
+// Standard radiology CT W/L presets. Values follow Radiopaedia /
+// Horos / OsiriX defaults so radiologists see familiar windows out of
+// the box. Soft Tissue is the universal default (W400 L40).
+//
+// Refs:
+//   https://radiopaedia.org/articles/windowing-ct
+//   Horos default preset bundle (CT-Abdomen, CT-Bone, CT-Lung, …)
 const CT_PRESETS: Preset[] = [
-  { name: 'Default', window: 700, level: 350, description: 'Coronary arteries (standard)' },
+  { name: 'Soft Tissue', window: 400, level: 40, description: 'Default soft-tissue window' },
+  { name: 'Bone', window: 1800, level: 400, description: 'Bone / spine' },
   { name: 'Lung', window: 1500, level: -600, description: 'Lung parenchyma' },
-  { name: 'Abdomen', window: 400, level: 40, description: 'Soft tissue' },
-  { name: 'Mediastinum', window: 350, level: 50, description: 'Mediastinal' },
-  { name: 'Chest', window: 800, level: 200, description: 'Thorax overview' },
-  { name: 'Bone', window: 2000, level: 300, description: 'Bone structures' },
-  { name: 'CT Angio', window: 600, level: 300, description: 'Vascular contrast' },
-  { name: 'TAVI', window: 555, level: 208, description: 'Aortic valve planning' },
-  { name: 'Cardiac Fat', window: 170, level: -115, description: 'Epicardial fat' },
+  { name: 'Brain', window: 80, level: 40, description: 'Brain parenchyma' },
+  { name: 'Abdomen', window: 350, level: 40, description: 'Abdominal soft tissue' },
+  { name: 'Mediastinum', window: 350, level: 50, description: 'Mediastinum' },
+  { name: 'Liver', window: 150, level: 30, description: 'Liver / narrow soft tissue' },
+  { name: 'CT Angio', window: 600, level: 100, description: 'Vascular contrast' },
+  { name: 'Stroke', window: 40, level: 40, description: 'Narrow stroke window' },
 ];
 
+// Standard MR presets. MR signal intensity is acquisition-dependent, so
+// the applyPreset hook scales these against the volume's actual data
+// range (see `dataMax` scaling below) — values are relative anchors,
+// not absolute. Default = full auto-window from min/max.
+//
+// Refs:
+//   https://radiopaedia.org/articles/window-and-level
+//   Horos MR presets (T1, T2, STIR, PD)
 const MR_PRESETS: Preset[] = [
-  { name: 'Default', window: 800, level: 400, description: 'T1 weighted — anatomy' },
-  { name: 'T2', window: 1200, level: 600, description: 'T2 weighted — fluid bright' },
-  { name: 'STIR/PD', window: 1500, level: 750, description: 'STIR / Proton Density' },
-  { name: 'Tendon', window: 450, level: 225, description: 'Tendons (T1/PD)' },
-  { name: 'Ligament', window: 350, level: 175, description: 'Ligaments (SL, TFCC)' },
-  { name: 'Bone Marrow', window: 700, level: 350, description: 'Bone marrow edema' },
-  { name: 'Edema', window: 1800, level: 900, description: 'Fluid/edema (STIR)' },
-  { name: 'Nerve', window: 400, level: 200, description: 'Peripheral nerve' },
-  { name: 'Bright', window: 2000, level: 1000, description: 'High signal overview' },
+  { name: 'Default', window: 2000, level: 1000, description: 'Auto W/L from data range' },
+  { name: 'T1', window: 600, level: 300, description: 'T1 weighted — anatomy' },
+  { name: 'T2', window: 1500, level: 750, description: 'T2 weighted — fluid bright' },
+  { name: 'STIR', window: 1800, level: 900, description: 'Fat-suppressed / fluid' },
+  { name: 'PD', window: 1200, level: 600, description: 'Proton density' },
+  { name: 'Bright', window: 800, level: 400, description: 'High contrast overview' },
 ];
 
 // Colormaps — VTK.js preset names
@@ -49,7 +61,10 @@ interface Props {
 export function WindowLevelPresets({ renderingEngineId, viewportIds, modality }: Props) {
   const mod = modality?.trim().toUpperCase() || '';
   const PRESETS = (mod === 'MR' || mod === 'MRI') ? MR_PRESETS : CT_PRESETS;
-  const [activePreset, setActivePreset] = useState<string | null>('Default');
+  // Start with no preset highlighted — the initial W/L comes from the
+  // DICOM WindowCenter/WindowWidth tags baked into the study, not from a
+  // named preset. "W/L" label until the user picks a window.
+  const [activePreset, setActivePreset] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [showColormap, setShowColormap] = useState(false);
   const [activeColormap, setActiveColormap] = useState('Grayscale');
