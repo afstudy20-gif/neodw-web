@@ -150,14 +150,16 @@ export function SeriesPanel({ seriesList, activeSeriesUID, onSelectSeries, onOpe
           background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 6,
           boxShadow: '0 8px 24px rgba(0,0,0,0.6)', padding: '4px 0', minWidth: 180,
         }}>
-          <button
-            style={{ display: 'block', width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: '12px', cursor: 'pointer', textAlign: 'left' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in oklch, var(--nd-ink) 6%, transparent)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-            onClick={() => { onSelectSeries(ctxMenu.series); setCtxMenu(null); }}
-          >
-            Open in MPR
-          </button>
+          {!['MR', 'MRI'].includes((ctxMenu.series.modality || '').toUpperCase()) && (
+            <button
+              style={{ display: 'block', width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: '12px', cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in oklch, var(--nd-ink) 6%, transparent)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+              onClick={() => { onSelectSeries(ctxMenu.series); setCtxMenu(null); }}
+            >
+              Open in MPR
+            </button>
+          )}
           <button
             style={{ display: 'block', width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: '12px', cursor: 'pointer', textAlign: 'left' }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'color-mix(in oklch, var(--nd-ink) 6%, transparent)')}

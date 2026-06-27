@@ -64,7 +64,7 @@ describe('computeMrVoiRange', () => {
     expect(range).toEqual({ lower: -2, upper: 32 });
   });
 
-  it('does not apply a black zero-width window when volume data is not ready', () => {
-    expect(computeMrVoiRange(undefined, 'T2')).toBeNull();
+  it('can apply fixed MR defaults before volume data is ready', () => {
+    expect(computeMrVoiRange(undefined, 'T2')).toEqual({ lower: -2, upper: 32 });
   });
 });

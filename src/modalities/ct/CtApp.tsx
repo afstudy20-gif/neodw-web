@@ -87,6 +87,20 @@ function scheduleDefaultWindowLevel(series: DicomSeriesInfo, engine: cornerstone
   });
 }
 
+function applyStackWindowLevel(series: DicomSeriesInfo, viewport: cornerstone.Types.IStackViewport) {
+  const modality = series.modality?.toUpperCase() || '';
+  if (modality === 'MR' || modality === 'MRI') {
+    const presetName = pickDefaultWindowLevelPreset(series) || 'Auto';
+    const range = computeMrVoiRange(undefined, presetName) || computeMrVoiRange(undefined, 'Auto');
+    if (range) {
+      (viewport as any).setProperties?.({ voiRange: range, invert: false });
+    }
+  } else if (modality === 'CT') {
+    (viewport as any).setProperties?.({ voiRange: { lower: -500, upper: 1300 } });
+  }
+  viewport.render();
+}
+
 type RightPanel = null | '3d' | 'tavi' | 'hand-mr' | 'la' | 'aorta' | 'vascular' | 'laa' | 'lv-adas';
 
 interface VolumeResult {
@@ -469,6 +483,7 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
       // Set the image stack on the viewport
       const vp = engine.getViewport('stack2d') as cornerstone.Types.IStackViewport;
       await vp.setStack(series.imageIds, Math.floor(series.imageIds.length / 2));
+      applyStackWindowLevel(series, vp);
 
       // Create a separate tool group for the stack viewport (no Crosshairs!)
       try {
@@ -515,6 +530,12 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
   const loadSeries = async (series: DicomSeriesInfo) => {
     const engine = renderingEngineRef.current;
     if (!engine) return;
+
+    const modality = series.modality?.toUpperCase() || '';
+    if (modality === 'MR' || modality === 'MRI') {
+      await open2DViewer(series);
+      return;
+    }
 
     if (series.numImages <= 1 || isSecondaryCaptureSopClass(series.sopClassUID)) {
       setScViewerSeries(series);

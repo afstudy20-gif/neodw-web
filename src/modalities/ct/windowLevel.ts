@@ -103,13 +103,14 @@ export function computeMrVoiRange(
   maxSamples = 80000
 ): MrVoiRange | null {
   const tuned = MR_PRESETS_TUNED.find((p) => p.name === presetName);
-  if (!scalarData || !tuned || tuned.reset || scalarData.length === 0) return null;
+  if (!tuned || tuned.reset) return null;
   if (tuned.fixedWindow && tuned.fixedLevel != null) {
     return {
       lower: tuned.fixedLevel - tuned.fixedWindow / 2,
       upper: tuned.fixedLevel + tuned.fixedWindow / 2,
     };
   }
+  if (!scalarData || scalarData.length === 0) return null;
 
   const stride = Math.max(1, Math.floor(scalarData.length / maxSamples));
   const positive: number[] = [];
