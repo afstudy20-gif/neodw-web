@@ -1637,3 +1637,66 @@ button { font: inherit; border: 0; cursor: pointer; background: transparent; col
   flex: 1;
   accent-color: #2f81f7;
 }
+
+/* ── PatientsPanel — server-side study management ───────── */
+.patients-panel {
+  background: color-mix(in oklch, var(--nd-ink) 4%, transparent);
+  border: 1px solid color-mix(in oklch, var(--nd-ink) 10%, transparent);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.patients-head {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; margin-bottom: 12px;
+}
+.upload-zone {
+  border: 2px dashed color-mix(in oklch, var(--nd-ink) 18%, transparent);
+  border-radius: 8px; padding: 14px;
+  text-align: center; font-size: 13px; color: var(--nd-ink-3);
+  transition: border-color .15s, background .15s;
+  margin-bottom: 12px;
+}
+.upload-zone.drag {
+  border-color: var(--nd-primary);
+  background: color-mix(in oklch, var(--nd-primary) 8%, transparent);
+}
+.upload-progress {
+  height: 6px; background: color-mix(in oklch, var(--nd-ink) 8%, transparent);
+  border-radius: 3px; overflow: hidden;
+}
+.upload-progress-bar {
+  height: 100%; background: var(--nd-primary);
+  transition: width .2s ease;
+}
+.link-btn {
+  background: none; border: none; color: var(--nd-primary);
+  text-decoration: underline; cursor: pointer; padding: 0; font-size: inherit;
+}
+.patients-loading, .patients-empty, .patients-error {
+  padding: 18px; text-align: center; color: var(--nd-ink-3); font-size: 14px;
+}
+.patients-error { color: #e74c3c; }
+.patients-list { display: flex; flex-direction: column; gap: 6px; }
+.patient-row {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 10px 12px;
+  background: color-mix(in oklch, var(--nd-ink) 3%, transparent);
+  border: 1px solid color-mix(in oklch, var(--nd-ink) 8%, transparent);
+  border-radius: 6px;
+  transition: background .12s, border-color .12s;
+}
+.patient-row:hover { background: color-mix(in oklch, var(--nd-ink) 6%, transparent); }
+.patient-info { flex: 1; min-width: 0; }
+.patient-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.patient-meta { font-size: 12px; color: var(--nd-ink-3); }
+.patient-actions { display: flex; gap: 6px; }
+.open-btn.primary {
+  background: var(--nd-primary); color: white; border-color: var(--nd-primary);
+}
+.open-btn.danger {
+  background: transparent; color: #e74c3c;
+  border: 1px solid color-mix(in oklch, #e74c3c 50%, transparent);
+}
+.open-btn.danger:hover:not(:disabled) {
+  background: color-mix(in oklch, #e74c3c 12%, transparent);
+}

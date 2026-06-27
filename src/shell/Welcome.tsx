@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'r
 import { LANGS, useI18n } from './i18n';
 import { useTheme } from '../theme/ThemeProvider';
 import type { ModalityRoute } from '../App';
+import { PatientsPanel } from './PatientsPanel';
+import type { StudyDetail } from '../shared/orthanc/api';
 
 interface Props {
   onLaunch: (route: ModalityRoute, files?: File[]) => void;
@@ -365,6 +367,21 @@ export default function Welcome({ onLaunch }: Props) {
             </div>
           );
         })}
+
+        {/* Server-side patient store: list, open, delete, upload. The Open
+            button routes through the existing remote-share URL flow so the
+            viewer's DICOMweb bootstrap takes over without a code path of
+            its own here. */}
+        <div className="nd-mode-group">
+          <PatientsPanel onOpenStudy={(study: StudyDetail, modality: 'ct' | 'mr') => {
+            const params = new URLSearchParams({
+              modality,
+              dicomweb: `${window.location.origin}/dicom-web`,
+              study: study.studyInstanceUID,
+            });
+            window.location.assign(`${window.location.origin}/?${params.toString()}`);
+          }} />
+        </div>
 
         {/* Contact + Support card (Flow-style) */}
         <div className="nd-support-wrap">

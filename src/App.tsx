@@ -1,5 +1,6 @@
 import { Component, lazy, Suspense, useState, useEffect, type ReactNode } from 'react';
 import Welcome from './shell/Welcome';
+import { PasswordGate } from './shell/PasswordGate';
 import { I18nProvider, useI18n } from './shell/i18n';
 import { ThemeProvider } from './theme/ThemeProvider';
 import type { CtInitialPanel } from './modalities/ct/CtApp';
@@ -75,7 +76,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <I18nProvider>
-        <Shell />
+        <PasswordGate>
+          <Shell />
+        </PasswordGate>
       </I18nProvider>
     </ThemeProvider>
   );
