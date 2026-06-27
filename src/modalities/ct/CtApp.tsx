@@ -35,22 +35,14 @@ import { LVADASPanel, type LVADASPanelHandle } from './components/LVADASPanel';
 import { VascularPanel, type VascularPanelHandle } from './components/VascularPanel';
 import { SecondaryCaptureViewer } from './components/SecondaryCaptureViewer';
 
-// Scanners ship a pile of derived series alongside the source axial CT
-// stack. Two buckets:
-//
-//   1. Pure rendered snapshots (VRT, Volume Render) — RGB Secondary
-//      Capture stacks with no real image data. Drop from the panel.
-//   2. Real images that don't form a coherent MPR volume (scanner-side
-//      sagittal/coronal reformats, MIP slabs, scout / SAYMA / Topogram /
-//      Localizer / Patient Protocol). Keep them in the panel but auto-
-//      route to the 2D stack viewer when clicked instead of MPR, which
-//      would otherwise show a scrambled axial reconstruction.
-const TRUE_RENDER_DESC = /\bVRT\b|VR Range|Volume Render/i;
-const NON_MPR_DESC = /\bsag\b|\bcor\b|SAYMA|Topogram|Scout|Surview|Localizer|\bMIP\b|MinIP|\bAVG\b|\b3D\b|Patient Protocol/i;
-
-function filterVrtSeries(series: DicomSeriesInfo[]): DicomSeriesInfo[] {
-  return series.filter((s) => !TRUE_RENDER_DESC.test(s.seriesDescription || ''));
-}
+// Scanner-side derived series (sag/cor reformats, MIP slabs, VRT/3D
+// snapshots, scout/SAYMA/Topogram/Localizer, Patient Protocol) are real
+// images but don't form a clean MPR volume. Keep them in the panel so
+// the reviewer can scroll through them, but route a click to the 2D
+// stack viewer instead of cornerstone's MPR pipeline — which would
+// otherwise scramble the axial reconstruction or render a blank
+// viewport.
+const NON_MPR_DESC = /\bVRT\b|VR Range|Volume Render|\bsag\b|\bcor\b|SAYMA|Topogram|Scout|Surview|Localizer|\bMIP\b|MinIP|\bAVG\b|\b3D\b|Patient Protocol/i;
 
 function isNonMprSeries(s: DicomSeriesInfo): boolean {
   return NON_MPR_DESC.test(s.seriesDescription || '');
@@ -360,8 +352,7 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
         }
         loadedFilesRef.current = expanded;
         setLoadingProgress('Parsing DICOM files...');
-        const rawSeries = await loadDicomFiles(expanded);
-        const series = filterVrtSeries(rawSeries);
+        const series = await loadDicomFiles(expanded);
         setSeriesList(series);
 
         if (series.length > 0) {
@@ -391,9 +382,12 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
   useEffect(() => {
     if (!isInitialized || !initialSeries || initialSeries.length === 0) return;
     if (initialFiles && initialFiles.length > 0) return; // file path wins
-    const filtered = filterVrtSeries(initialSeries);
-    setSeriesList(filtered);
-    if (filtered.length > 0) void loadSeries(filtered[0]);
+    setSeriesList(initialSeries);
+    // Auto-pick the first MPR-eligible series so the user lands on a real
+    // volume — falling back to the first series if every entry is a derived
+    // sag/cor/VRT/MIP image.
+    const primary = initialSeries.find((s) => !isNonMprSeries(s)) || initialSeries[0];
+    void loadSeries(primary);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isInitialized]);
 
