@@ -35,13 +35,23 @@ import { LVADASPanel, type LVADASPanelHandle } from './components/LVADASPanel';
 import { VascularPanel, type VascularPanelHandle } from './components/VascularPanel';
 import { SecondaryCaptureViewer } from './components/SecondaryCaptureViewer';
 
-// Pre-rendered VRT (Volume Rendering Technique) screenshots come back as
-// RGB Secondary Capture stacks. They have no useful ImagePositionPatient/
-// ImageOrientationPatient for MPR reconstruction, so cornerstone shows a
-// blank viewport when one is loaded as the primary series. Strip them
-// here — radiology review only needs the source axial stack.
+// Scanners ship a pile of non-axial derived series alongside the source
+// axial CT stack: pre-rendered VRT/3D snapshots, sagittal and coronal
+// reconstructions (already collapsed to 2D), MIP slabs, scout/localizer
+// "SAYMA"/Topogram images, and Secondary Captures. Cornerstone's MPR
+// pipeline assumes a coherent axial volume — feeding it any of those
+// produces a blank or scrambled viewport. We drop them from the series
+// panel so the reviewer only sees the source axial stacks usable for MPR.
+//
+// Patterns explained:
+//   VRT / VR Range / Volume Render → pre-rendered 3D snapshot (RGB SC)
+//   \bsag\b / \bcor\b              → scanner-side oblique reconstruction
+//   SAYMA / Topogram / Scout / Surview / Localizer → planning radiographs
+//   MIP / MinIP / AVG / 3D         → projection slabs, not volumes
+const NON_VOLUMETRIC_DESC = /\bVRT\b|VR Range|Volume Render|\bsag\b|\bcor\b|SAYMA|Topogram|Scout|Surview|Localizer|\bMIP\b|MinIP|\bAVG\b|\b3D\b/i;
+
 function filterVrtSeries(series: DicomSeriesInfo[]): DicomSeriesInfo[] {
-  return series.filter((s) => !/\bVRT\b|VR Range|Volume Render/i.test(s.seriesDescription || ''));
+  return series.filter((s) => !NON_VOLUMETRIC_DESC.test(s.seriesDescription || ''));
 }
 
 const RENDERING_ENGINE_ID = 'myRenderingEngine';
