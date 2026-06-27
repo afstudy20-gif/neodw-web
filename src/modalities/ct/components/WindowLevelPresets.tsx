@@ -255,30 +255,45 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
   }, [invertColors, renderingEngineId, viewportIds]);
 
   // Auto-apply the configured default preset on every series switch.
-  // Streaming volumes don't expose a reliable "loaded" signal that's
-  // safe to listen to from React — and the percentile sampler in
-  // applyPreset returns the wrong window when scalarData is still empty.
-  // Brute-force solve: schedule multiple applies at increasing offsets.
-  // Each call re-resolves the VOI against whatever data is loaded so
-  // far; the last one runs once the streaming volume is fully populated
-  // and produces the final, correct window. Cheap (each apply is just a
-  // typed-array sample + setProperties call) and dependable.
+  // Three triggers, any of which fires the apply:
+  //
+  //  1. Cornerstone's IMAGE_VOLUME_LOADING_COMPLETED event — fires once
+  //     the StreamingImageVolume has every frame populated. Best signal
+  //     for the percentile sampler.
+  //  2. IMAGE_VOLUME_MODIFIED — fires repeatedly as each batch of frames
+  //     decodes in. Re-resolves the window as more data lands.
+  //  3. Backstop timer at 12s for cached / fast-load cases where the
+  //     events fire before this effect subscribes, or where the volume
+  //     id we listen on doesn't match (we still want the window set).
   useEffect(() => {
     if (!defaultPreset || !volumeKey) return;
     const preset = PRESETS.find((p) => p.name === defaultPreset);
     if (!preset) return;
-    const offsets = [800, 2500, 5000, 10000];
-    const timers = offsets.map((ms) =>
-      setTimeout(() => {
-        const engine = cornerstone.getRenderingEngine(renderingEngineId);
-        if (!engine) return;
-        const ready = getAllTargetVpIds().some((id) => {
-          try { return !!engine.getViewport(id); } catch { return false; }
-        });
-        if (ready) applyPreset(preset);
-      }, ms),
-    );
-    return () => { timers.forEach(clearTimeout); };
+
+    const apply = () => {
+      const engine = cornerstone.getRenderingEngine(renderingEngineId);
+      if (!engine) return;
+      const ready = getAllTargetVpIds().some((id) => {
+        try { return !!engine.getViewport(id); } catch { return false; }
+      });
+      if (ready) applyPreset(preset);
+    };
+
+    const onCompleted = () => apply();
+    const onModified = () => apply();
+    const target = cornerstone.eventTarget as unknown as EventTarget;
+    target.addEventListener(cornerstone.Enums.Events.IMAGE_VOLUME_LOADING_COMPLETED, onCompleted);
+    target.addEventListener(cornerstone.Enums.Events.IMAGE_VOLUME_MODIFIED, onModified);
+
+    // Backstop schedule — also covers the case where everything is
+    // cached and load events fired before this listener attached.
+    const timers = [600, 2000, 5000, 12000].map((ms) => setTimeout(apply, ms));
+
+    return () => {
+      target.removeEventListener(cornerstone.Enums.Events.IMAGE_VOLUME_LOADING_COMPLETED, onCompleted);
+      target.removeEventListener(cornerstone.Enums.Events.IMAGE_VOLUME_MODIFIED, onModified);
+      timers.forEach(clearTimeout);
+    };
   }, [volumeKey, defaultPreset, PRESETS, renderingEngineId, getAllTargetVpIds, applyPreset]);
 
   // Number key shortcuts (1-9) for presets

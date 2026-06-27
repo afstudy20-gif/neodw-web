@@ -48,6 +48,26 @@ function isNonMprSeries(s: DicomSeriesInfo): boolean {
   return NON_MPR_DESC.test(s.seriesDescription || '');
 }
 
+// Pick a default W/L preset name based on the active series so the
+// reviewer lands on a sensible window without clicking. CT → "Bone"
+// (spine review default). MR → detect sequence from the description:
+//   STIR / TIRM     → "STIR/TIRM"  (fluid-bright fat-suppressed)
+//   T1 / TSE_T1     → "T1"
+//   T2 / TSE_T2     → "T2"
+//   Everything else → "Auto" (percentile-based)
+function pickDefaultPreset(series: DicomSeriesInfo | null): string | undefined {
+  if (!series) return undefined;
+  const mod = (series.modality || '').toUpperCase();
+  if (mod === 'CT') return 'Bone';
+  if (!mod.startsWith('MR')) return undefined;
+  const desc = (series.seriesDescription || '').toLowerCase();
+  if (/\bstir\b|tirm/.test(desc)) return 'STIR/TIRM';
+  if (/\bt1\b|t1_|_t1|tse[_-]?t1/.test(desc)) return 'T1';
+  if (/\bt2\b|t2_|_t2|tse[_-]?t2|space|tirm/.test(desc)) return 'T2';
+  if (/\bpd\b/.test(desc)) return 'PD';
+  return 'Auto';
+}
+
 const RENDERING_ENGINE_ID = 'myRenderingEngine';
 const VOLUME_ID = 'cornerstoneStreamingImageVolume:myVolume';
 const VIEWPORT_IDS = ['axial', 'sagittal', 'coronal', 'volume3d'];
@@ -953,11 +973,7 @@ export default function App({ onBack, initialFiles, initialSeries, initialPanel 
             renderingEngineId={RENDERING_ENGINE_ID}
             viewportIds={MPR_VIEWPORT_IDS}
             modality={activeSeries?.modality}
-            defaultPreset={
-              (activeSeries?.modality || '').toUpperCase() === 'CT' ? 'Bone'
-              : (activeSeries?.modality || '').toUpperCase().startsWith('MR') ? 'Auto'
-              : undefined
-            }
+            defaultPreset={pickDefaultPreset(activeSeries)}
             volumeKey={activeSeries?.seriesInstanceUID}
           />
           <div className="toolbar-divider" />
