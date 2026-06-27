@@ -50,7 +50,7 @@ interface MRPreset {
 }
 const MR_PRESETS_TUNED: MRPreset[] = [
   { name: 'Default',   reset: true,                                 windowFrac: 0, levelFrac: 0, description: 'DICOM WindowCenter / WindowWidth' },
-  { name: 'Auto',      windowFrac: 0.80, levelFrac: 0.30, description: 'Auto-fit to full data range' },
+  { name: 'Auto',      windowFrac: 1.10, levelFrac: 0.45, description: 'Auto-fit to tissue percentile' },
   { name: 'T1',        windowFrac: 0.45, levelFrac: 0.25, description: 'T1 weighted — anatomy' },
   { name: 'T2',        windowFrac: 0.70, levelFrac: 0.30, description: 'T2 weighted — fluid bright' },
   { name: 'STIR/TIRM', windowFrac: 0.85, levelFrac: 0.35, description: 'Fat-suppressed / fluid' },
@@ -254,32 +254,42 @@ export function WindowLevelPresets({ renderingEngineId, viewportIds, modality, d
     }
   }, [invertColors, renderingEngineId, viewportIds]);
 
-  // Auto-apply the configured default preset once per volume. Polling
-  // for the viewport to be ready is cheaper than threading a "volume
-  // mounted" event up through CtApp — the volume usually appears within
-  // a few hundred milliseconds of the series switch.
+  // Auto-apply the configured default preset once per volume. Waits for
+  // both the viewport to mount AND the volume's scalar data to start
+  // populating — otherwise the MR "Auto" preset resolves against a
+  // stale or empty range and produces a near-black window. 30s ceiling
+  // covers slow networks loading a 300-slice 3D MR volume.
   useEffect(() => {
     if (!defaultPreset || !volumeKey) return;
     const preset = PRESETS.find((p) => p.name === defaultPreset);
     if (!preset) return;
+    const isMR = (mod === 'MR' || mod === 'MRI');
     let cancelled = false;
     let attempts = 0;
     const tick = () => {
       if (cancelled) return;
       const engine = cornerstone.getRenderingEngine(renderingEngineId);
-      const ready = engine && getAllTargetVpIds().some((id) => {
+      const viewportReady = engine && getAllTargetVpIds().some((id) => {
         try { return !!engine.getViewport(id); } catch { return false; }
       });
-      if (ready) {
+      let volumeReady = true;
+      if (isMR && viewportReady) {
+        try {
+          const volume = cornerstone.cache.getVolume('cornerstoneStreamingImageVolume:myVolume') as any;
+          const sd = volume?.scalarData as ArrayLike<number> | undefined;
+          volumeReady = !!sd && sd.length > 1000;
+        } catch { volumeReady = false; }
+      }
+      if (viewportReady && volumeReady) {
         applyPreset(preset);
-      } else if (attempts < 30) {
+      } else if (attempts < 150) {
         attempts += 1;
         setTimeout(tick, 200);
       }
     };
     const start = setTimeout(tick, 200);
     return () => { cancelled = true; clearTimeout(start); };
-  }, [volumeKey, defaultPreset, PRESETS, renderingEngineId, getAllTargetVpIds, applyPreset]);
+  }, [volumeKey, defaultPreset, PRESETS, renderingEngineId, getAllTargetVpIds, applyPreset, mod]);
 
   // Number key shortcuts (1-9) for presets
   useEffect(() => {
